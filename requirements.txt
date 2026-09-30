@@ -1,0 +1,2 @@
+# Dépendances pour jouer
+pygame>=2.1

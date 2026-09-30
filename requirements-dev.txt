@@ -1,0 +1,7 @@
+# Dépendances pour développer / profiler  (pip install -r requirements-dev.txt)
+-r requirements.txt
+ruff>=0.5          # analyse statique  (≈ gcc -Wall -Wextra)
+snakeviz>=2.2      # visualisation des profils cProfile dans le navigateur
+py-spy>=0.3        # profileur par échantillonnage du jeu en cours (≈ perf)
+pyinstaller>=6.0  # création du .exe
+pillow>=10       # génération de l'icône (tools/make_icon.py)

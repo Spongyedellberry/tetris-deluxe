@@ -1,0 +1,26 @@
+# ── Build / distribution (régénérés par make exe) ──
+build/
+dist/
+*.spec.bak
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ── Outils ──
+.ruff_cache/
+*.prof
+
+# ── Données personnelles du joueur (jamais sur GitHub) ──
+tetris_settings.json
+tetris_scores.json
+crash.log
+
+# ── Système ──
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

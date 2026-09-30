@@ -1,0 +1,20 @@
+[project]
+name = "tetris-deluxe"
+version = "3.0.0"
+description = "Tetris Deluxe — tkinter + pygame (audio)"
+requires-python = ">=3.10"
+dependencies = ["pygame>=2.1"]
+
+# ── Analyse statique (équivalent de gcc -Wall -Wextra) ─────────
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# E/W = style PEP 8, F = erreurs (imports/variables inutilisés…),
+# B = bugs probables, PERF = anti-patterns de performance
+select = ["E9", "F", "B", "PERF"]
+ignore = [
+    "B905",     # zip(strict=...) inutile ici
+    "PERF203",  # try/except en boucle : coût nul depuis Python 3.11, hors chemins critiques
+]
