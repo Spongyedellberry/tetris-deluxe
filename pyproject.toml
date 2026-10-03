@@ -1,6 +1,6 @@
 [project]
 name = "tetris-deluxe"
-version = "3.0.0"
+version = "3.1.0"
 description = "Tetris Deluxe — tkinter + pygame (audio)"
 requires-python = ">=3.10"
 dependencies = ["pygame>=2.1"]

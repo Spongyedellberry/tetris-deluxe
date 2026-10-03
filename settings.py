@@ -107,6 +107,8 @@ DEFAULT_SETTINGS = {
     "sfx_enabled": True,
     "bgm_volume": 0.3,
     "sfx_volume": 0.6,
+    # Derniers noms saisis (pré-remplis dans le panneau de saisie)
+    "last_names": {"solo": "", "p1": "", "p2": ""},
     "solo_keys": {
         "move_left":  "<Left>",
         "move_right": "<Right>",

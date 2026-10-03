@@ -38,11 +38,13 @@ Sous Windows, `make` s'installe avec `winget install ezwinports.make`.
 | Module                | Rôle                                                     |
 |-----------------------|----------------------------------------------------------|
 | `main.py`             | point d'entrée, menu animé, navigation                   |
+| `name_panel.py`       | panneau de saisie des noms (solo / multi)                |
+| `ui_sounds.py`        | sons des boutons et musique des menus                    |
 | `game_solo.py`        | mode solo (animations, T-Spin, hold)                     |
 | `game_multi.py`       | mode 2 joueurs, envoi de garbage                         |
 | `board.py`, `pieces.py`, `score.py` | logique de jeu (sans interface)            |
 | `renderer.py`         | rendu différentiel : seules les cellules modifiées sont redessinées |
-| `audio.py`            | synthèse des sons, cache dans `assets/audio/`            |
+| `audio.py`            | synthèse des sons et des 2 musiques (jeu, menu), cache dans `assets/audio/` |
 | `settings.py`, `settings_screen.py` | paramètres persistants                     |
 | `paths.py`, `version.py` | chemins (dev / .exe) et identité de l'application     |
 | `tools/`              | benchmark, test, profilage, icône                        |

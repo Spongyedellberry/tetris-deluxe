@@ -35,7 +35,13 @@ def user_data_dir(app_name: str = "Tetris") -> str:
 
     En développement : le dossier du projet (comportement historique).
     En .exe : %APPDATA%/Tetris (Windows) ou ~/.local/share/Tetris.
+    Variable TETRIS_DATA_DIR : force un autre dossier (utilisé par les tests,
+    pour ne jamais toucher aux sauvegardes du joueur).
     """
+    override = os.environ.get("TETRIS_DATA_DIR")
+    if override:
+        os.makedirs(override, exist_ok=True)
+        return override
     if not is_frozen():
         return _SRC_DIR
     if sys.platform == "win32":

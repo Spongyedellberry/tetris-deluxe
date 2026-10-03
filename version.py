@@ -8,4 +8,4 @@ Utilisé par le titre de la fenêtre, le journal d'erreurs et le build .exe
 APP_NAME = "Tetris Deluxe"
 APP_ID = "samuel.tetrisdeluxe"          # identifiant Windows (barre des tâches)
 AUTHOR = "Samuel"
-__version__ = "3.0.0"
+__version__ = "3.1.0"

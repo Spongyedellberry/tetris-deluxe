@@ -11,7 +11,6 @@ puis déplacés (canvas.move / coords) au lieu d'être détruits et recréés
 import os
 import sys
 import tkinter as tk
-from tkinter import simpledialog
 import random
 import math
 import time
@@ -24,6 +23,8 @@ from leaderboard import Leaderboard
 from settings import Settings, key_display
 from ui_components import make_label
 from paths import asset, user_data_dir
+from ui_sounds import UISounds
+from name_panel import NamePanel
 from version import APP_NAME, APP_ID, __version__
 
 # ─── Dimensions du menu ────────────────────────────────────
@@ -191,6 +192,10 @@ class App:
         self.leaderboard = Leaderboard()
         self.settings = Settings()
 
+        # Sons d'interface (survol/clic de tous les boutons) + musique du menu
+        self.ui = UISounds(self.root, self.settings)
+        self.ui.install()
+
         if self.settings.fullscreen:
             self.root.attributes("-fullscreen", True)
 
@@ -237,7 +242,8 @@ class App:
                                    highlightthickness=2,
                                    highlightbackground="#2a2a5a")
         self._menu_window_id = self.menu_canvas.create_window(
-            0, 0, window=self.menu_frame, anchor="center")
+            0, 0, window=self.menu_frame, anchor="center", tags="centered")
+        self._panel = None
 
         self._build_menu_content()
 
@@ -261,6 +267,7 @@ class App:
             self._pieces.append(p)
 
         self._menu_tick()
+        self.ui.music("menu")         # ne redémarre pas si elle joue déjà
 
     def _build_menu_content(self):
         f = self.menu_frame
@@ -313,6 +320,8 @@ class App:
 
         for text, cmd in buttons:
             b = tk.Button(f, text=text, command=cmd, **btn_style)
+            if cmd == self.root.destroy:
+                b.ui_sound = "ui_back"
             b.pack(pady=4)
             b.bind("<Enter>", lambda e, b=b: b.config(bg="#2a2a5a", fg=ACCENT))
             b.bind("<Leave>", lambda e, b=b: b.config(bg="#1e1e40", fg=TEXT_COLOR))
@@ -345,7 +354,8 @@ class App:
         """Recentre le menu quand la fenêtre change de taille."""
         cx = event.width // 2
         cy = event.height // 2
-        self.menu_canvas.coords(self._menu_window_id, cx, cy)
+        for item in self.menu_canvas.find_withtag("centered"):   # menu + panneau
+            self.menu_canvas.coords(item, cx, cy)
 
     # ── Animation du menu ─────────────────────────────────────
     def _menu_tick(self):
@@ -427,20 +437,39 @@ class App:
     #  NAVIGATION
     # ══════════════════════════════════════════════════════════
 
-    def _ask_name(self, prompt: str = "Entrez votre nom :") -> str:
-        name = simpledialog.askstring("Joueur", prompt, parent=self.root)
-        return name.strip() if name and name.strip() else "Joueur"
+    # ── Saisie des noms (panneau intégré au menu) ────────────
+    def _open_name_panel(self, mode: str, on_confirm):
+        """Remplace le menu par le panneau de saisie (le fond reste animé)."""
+        if self._panel is not None:
+            return
+        c = self.menu_canvas
+        c.itemconfigure(self._menu_window_id, state="hidden")
+
+        def cancel():
+            c.delete(self._panel_window_id)
+            self._panel.destroy()
+            self._panel = None
+            c.itemconfigure(self._menu_window_id, state="normal")
+
+        self._panel = NamePanel(c, mode, self.settings, self.ui,
+                                on_confirm=on_confirm, on_cancel=cancel)
+        self._panel_window_id = c.create_window(
+            c.winfo_width() // 2, c.winfo_height() // 2,
+            window=self._panel, anchor="center", tags="centered")
 
     def _start_solo(self):
-        name = self._ask_name("Votre nom (Mode Solo) :")
+        self._open_name_panel("solo", lambda names: self._launch_solo(names[0]))
+
+    def _start_multi(self):
+        self._open_name_panel("multi", lambda names: self._launch_multi(*names))
+
+    def _launch_solo(self, name: str):
         self._clear()
         from game_solo import SoloGame
         SoloGame(self.root, name, self.leaderboard, self.settings,
                  on_quit=self._show_menu)
 
-    def _start_multi(self):
-        name1 = self._ask_name("Joueur 1 — Entrez votre nom :")
-        name2 = self._ask_name("Joueur 2 — Entrez votre nom :")
+    def _launch_multi(self, name1: str, name2: str):
         self._clear()
         from game_multi import MultiplayerGame
         MultiplayerGame(self.root, name1, name2, self.settings,
@@ -448,11 +477,13 @@ class App:
 
     def _show_settings(self):
         self._clear()
+        self.ui.music("menu")
         from settings_screen import SettingsScreen
         SettingsScreen(self.root, self.settings, on_back=self._show_menu)
 
     def _show_leaderboard(self):
         self._clear()
+        self.ui.music("menu")
         frame = tk.Frame(self.root, bg=PANEL_BG)
         frame.pack(padx=30, pady=20)
 
@@ -494,10 +525,12 @@ class App:
                              ).pack(side=tk.LEFT, padx=2)
 
         tk.Frame(frame, height=16, bg=PANEL_BG).pack()
-        tk.Button(frame, text="← Retour au menu", command=self._show_menu,
-                  font=("Consolas", 11), fg=TEXT_COLOR, bg="#1e1e40",
-                  activeforeground=ACCENT, activebackground="#2a2a5a",
-                  relief="flat", cursor="hand2", padx=16, pady=6).pack()
+        back = tk.Button(frame, text="← Retour au menu", command=self._show_menu,
+                         font=("Consolas", 11), fg=TEXT_COLOR, bg="#1e1e40",
+                         activeforeground=ACCENT, activebackground="#2a2a5a",
+                         relief="flat", cursor="hand2", padx=16, pady=6)
+        back.ui_sound = "ui_back"
+        back.pack()
 
     # ── Lancer ────────────────────────────────────────────────
     def run(self):

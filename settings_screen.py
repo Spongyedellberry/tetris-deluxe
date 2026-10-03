@@ -218,11 +218,13 @@ class SettingsScreen(tk.Frame):
                   activeforeground=ACCENT, activebackground="#2a2a5a",
                   relief="flat", cursor="hand2", padx=12, pady=6).pack(side=tk.LEFT, padx=6)
 
-        tk.Button(bottom, text="← Retour au menu",
-                  command=self._go_back,
-                  font=("Consolas", 11), fg=TEXT_COLOR, bg="#1e1e40",
-                  activeforeground=ACCENT, activebackground="#2a2a5a",
-                  relief="flat", cursor="hand2", padx=12, pady=6).pack(side=tk.LEFT, padx=6)
+        back = tk.Button(bottom, text="← Retour au menu",
+                         command=self._go_back,
+                         font=("Consolas", 11), fg=TEXT_COLOR, bg="#1e1e40",
+                         activeforeground=ACCENT, activebackground="#2a2a5a",
+                         relief="flat", cursor="hand2", padx=12, pady=6)
+        back.ui_sound = "ui_back"          # son « retour » (voir ui_sounds.py)
+        back.pack(side=tk.LEFT, padx=6)
 
         # Label de capture (caché par défaut)
         self.capture_label = make_label(f, "", size=12, bold=True, color=ACCENT)
@@ -276,7 +278,7 @@ class SettingsScreen(tk.Frame):
             from audio import get_audio
             am = get_audio()
             if self.settings.music_enabled:
-                am.play_bgm()
+                am.play_bgm("menu")        # on est dans les menus
             else:
                 am.stop_bgm()
         except Exception:

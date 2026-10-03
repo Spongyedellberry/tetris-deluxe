@@ -82,13 +82,19 @@ def _square(freq: float, duration: float, amp: int = MAX_AMP // 2, fade: float =
     return samples
 
 
-def _noise(duration: float, amp: int = MAX_AMP // 3, fade: float = 0.01) -> list[int]:
-    """Génère du bruit blanc (pour percussions)."""
+def _noise(duration: float, amp: int = MAX_AMP // 3, fade: float = 0.01,
+           seed: int = 0) -> list[int]:
+    """Génère du bruit blanc (pour percussions).
+
+    Graine fixe : `make assets-force` produit des fichiers identiques
+    octet par octet → aucune fausse modification dans Git.
+    """
+    rng = random.Random(seed)
     n = int(SAMPLE_RATE * duration)
     fade_n = int(SAMPLE_RATE * fade)
     samples = []
     for i in range(n):
-        val = random.randint(-amp, amp)
+        val = rng.randint(-amp, amp)
         if i < fade_n:
             val = int(val * i / fade_n)
         elif i > n - fade_n:
@@ -466,11 +472,172 @@ def _make_bgm() -> bytes:
 
 
 # ══════════════════════════════════════════════════════════════
+#  Instruments supplémentaires (thème du menu)
+# ══════════════════════════════════════════════════════════════
+
+_SEMITONES = {"C": -9, "D": -7, "E": -5, "F": -4, "G": -2, "A": 0, "B": 2}
+
+
+def _freq(note: str) -> float:
+    """Fréquence d'une note en notation anglaise : 'A4', 'G#3', 'Bb5'."""
+    name, octave = note[:-1], int(note[-1])
+    n = _SEMITONES[name[0]]
+    if "#" in name:
+        n += 1
+    elif name.endswith("b") and len(name) > 1:
+        n -= 1
+    return 440.0 * 2 ** ((n + (octave - 4) * 12) / 12)
+
+
+def _pluck(freq: float, duration: float, amp: int, decay: float = 6.0) -> list[int]:
+    """Onde carrée à décroissance rapide (arpège « harpe 8-bit »)."""
+    n = int(SAMPLE_RATE * duration)
+    period = SAMPLE_RATE / freq
+    half = period / 2
+    k = math.exp(-decay / SAMPLE_RATE)
+    attack, release = min(n, 40), min(n, 60)
+    env = float(amp)
+    out = [0] * n
+    for i in range(n):
+        v = env if (i % period) < half else -env
+        if i < attack:
+            v *= i / attack
+        elif i > n - release:
+            v *= (n - i) / release
+        out[i] = int(v)
+        env *= k
+    return out
+
+
+def _lead(freq: float, duration: float, amp: int, duty: float = 0.25,
+          vibrato: float = 0.004, decay: float = 0.9) -> list[int]:
+    """Voix de mélodie douce : onde pulsée 25 %, léger vibrato, enveloppe."""
+    n = int(SAMPLE_RATE * duration)
+    attack, release = min(n, int(SAMPLE_RATE * 0.015)), min(n, int(SAMPLE_RATE * 0.05))
+    two_pi_vib = 2 * math.pi * 5.5 / SAMPLE_RATE
+    k = math.exp(-decay / SAMPLE_RATE)
+    phase, env = 0.0, float(amp)
+    out = [0] * n
+    for i in range(n):
+        phase += freq * (1 + vibrato * math.sin(two_pi_vib * i)) / SAMPLE_RATE
+        phase -= int(phase)
+        v = env if phase < duty else -env
+        if i < attack:
+            v *= i / attack
+        elif i > n - release:
+            v *= (n - i) / release
+        out[i] = int(v)
+        env *= k
+    return out
+
+
+def _make_menu_bgm() -> bytes:
+    """Thème du menu — composition originale, calme (la mineur, 96 BPM).
+
+    16 mesures (≈ 40 s, jouées en boucle) :
+      1–8    arpèges + basse + mélodie
+      9–12   arpèges + contre-chant tenu (respiration)
+      13–16  mélodie variée + charleston
+    """
+    q = 60.0 / 96
+    e, h, dh, w = q / 2, 2 * q, 3 * q, 4 * q
+
+    progression = ["Am", "F", "C", "G", "Am", "F", "Dm", "E"] * 2
+    chords = {
+        "Am": ["A3", "C4", "E4", "A4"], "F": ["F3", "A3", "C4", "F4"],
+        "C": ["C4", "E4", "G4", "C5"], "G": ["G3", "B3", "D4", "G4"],
+        "Dm": ["D4", "F4", "A4", "D5"], "E": ["E3", "G#3", "B3", "E4"],
+    }
+    root = {"Am": "A2", "F": "F2", "C": "C3", "G": "G2", "Dm": "D3", "E": "E2"}
+    fifth = {"Am": "E3", "F": "C3", "C": "G3", "G": "D3", "Dm": "A3", "E": "B2"}
+    pattern = [0, 1, 2, 3, 2, 1, 2, 1]
+
+    arp, bass, hat = [], [], []
+    for bar, ch in enumerate(progression):
+        tones = chords[ch]
+        for idx in pattern:
+            arp += _pluck(_freq(tones[idx]), e, amp=1700)
+        bass += _sine(_freq(root[ch]), h, amp=3600, fade=0.03)
+        bass += _sine(_freq(fifth[ch] if bar % 2 else root[ch]), h, amp=3000, fade=0.03)
+        if bar >= 12:                                   # charleston sur les contretemps
+            for _ in range(4):
+                hat += _silence(e) + _noise(0.025, amp=650, fade=0.008) + _silence(e - 0.025)
+        else:
+            hat += _silence(w)
+
+    def voice(notes, amp, **kw):
+        out = []
+        for note, dur in notes:
+            gap = dur * 0.06
+            out += _lead(_freq(note), dur - gap, amp, **kw) + _silence(gap)
+        return out
+
+    melody = voice([
+        ("E5", h), ("D5", q), ("C5", q),      ("C5", dh), ("A4", q),
+        ("G4", q), ("C5", q), ("E5", h),      ("D5", w),
+        ("E5", q), ("A5", q), ("G5", q), ("E5", q),
+        ("F5", h), ("E5", q), ("C5", q),      ("D5", h), ("F5", q), ("E5", q),
+        ("B4", h), ("G#4", h),
+    ], amp=3200)
+    counter = voice([("A4", w), ("A4", w), ("G4", w), ("B4", w)],
+                    amp=1900, duty=0.5, decay=0.4)
+    ending = voice([
+        ("E5", q), ("A5", q), ("B5", q), ("C6", q),   ("A5", h), ("G5", q), ("F5", q),
+        ("D5", h), ("F5", q), ("A5", q),              ("E5", w),
+    ], amp=3000)
+
+    lead = melody + counter + ending
+    n = max(len(arp), len(bass), len(lead), len(hat))
+    pad = [t + [0] * (n - len(t)) for t in (arp, bass, lead, hat)]
+    gain = 1.35          # volume perçu proche de la musique de jeu, sans saturer
+    return _samples_to_wav_bytes([int(v * gain) for v in _mix(*pad)])
+
+
+# ── Sons d'interface (menus) ──────────────────────────────────
+
+def _make_ui_hover_sfx() -> bytes:
+    """Survol d'un bouton : petit « tic » doux."""
+    return _samples_to_wav_bytes(_sine(1320, 0.035, amp=2600, fade=0.012))
+
+
+def _make_ui_select_sfx() -> bytes:
+    """Validation : deux notes montantes."""
+    return _samples_to_wav_bytes(_concat(
+        _square(_freq("E5"), 0.04, amp=3800), _square(_freq("B5"), 0.07, amp=4200)))
+
+
+def _make_ui_back_sfx() -> bytes:
+    """Retour / annulation : deux notes descendantes."""
+    return _samples_to_wav_bytes(_concat(
+        _square(_freq("B5"), 0.04, amp=3500), _square(_freq("E5"), 0.07, amp=3800)))
+
+
+def _make_ui_type_sfx() -> bytes:
+    """Frappe au clavier dans un champ de saisie."""
+    return _samples_to_wav_bytes(_square(1800, 0.012, amp=1500, fade=0.004))
+
+
+def _make_ui_start_sfx() -> bytes:
+    """Lancement d'une partie : arpège + basse."""
+    melody = _concat(
+        _square(_freq("C5"), 0.05, amp=5000), _square(_freq("E5"), 0.05, amp=5200),
+        _square(_freq("G5"), 0.05, amp=5400), _square(_freq("C6"), 0.18, amp=6000),
+    )
+    bass = _concat(_silence(0.15), _sine(_freq("C4"), 0.18, amp=5000))
+    return _samples_to_wav_bytes(_mix(melody, bass))
+
+
+# ══════════════════════════════════════════════════════════════
 #  Cache disque des sons pré-calculés
 # ══════════════════════════════════════════════════════════════
 
 AUDIO_DIR = asset("audio")
-BGM_NAME = "bgm"
+
+# Pistes de musique : nom logique → (fichier dans assets/audio, générateur)
+BGM_TRACKS = {
+    "game": ("bgm", _make_bgm),
+    "menu": ("menu_bgm", _make_menu_bgm),
+}
 
 
 def _asset_path(name: str) -> str:
@@ -502,7 +669,7 @@ def export_all(force: bool = False) -> list[str]:
     """Pré-calcule tous les sons dans assets/audio/. Retourne les fichiers écrits."""
     os.makedirs(AUDIO_DIR, exist_ok=True)
     generators = dict(AudioManager.SFX_GENERATORS)
-    generators[BGM_NAME] = _make_bgm
+    generators.update(dict(BGM_TRACKS.values()))
     written = []
     for name, gen in generators.items():
         path = _asset_path(name)
@@ -523,7 +690,8 @@ class AudioManager:
     Utilisation :
         audio = AudioManager()
         audio.play_sfx("drop")
-        audio.play_bgm()
+        audio.play_bgm()          # musique de jeu
+        audio.play_bgm("menu")    # musique du menu
         audio.set_sfx_volume(0.5)
     """
 
@@ -539,12 +707,19 @@ class AudioManager:
         "level_up":   _make_level_up_sfx,
         "hold":       _make_hold_sfx,
         "game_over":  _make_game_over_sfx,
+        # Interface
+        "ui_hover":   _make_ui_hover_sfx,
+        "ui_select":  _make_ui_select_sfx,
+        "ui_back":    _make_ui_back_sfx,
+        "ui_type":    _make_ui_type_sfx,
+        "ui_start":   _make_ui_start_sfx,
     }
 
     def __init__(self):
         self.available = False
         self._sounds: dict = {}
-        self._bgm_tmpfile: str | None = None
+        self._bgm_tmpfiles: dict[str, str] = {}
+        self._bgm_track: str | None = None
         self._sfx_volume: float = 0.6
         self._bgm_volume: float = 0.3
         self._bgm_playing = False
@@ -569,8 +744,7 @@ class AudioManager:
             except Exception:
                 pass
 
-        # La BGM est chargée paresseusement au premier play_bgm()
-        self._bgm_tmpfile = None
+        # Les musiques sont chargées paresseusement au premier play_bgm()
 
     # ── Lecture SFX ───────────────────────────────────────────
     def play_sfx(self, name: str):
@@ -582,39 +756,48 @@ class AudioManager:
             sound.play()
 
     # ── Lecture BGM ───────────────────────────────────────────
-    def _bgm_source(self) -> str | None:
+    def _bgm_source(self, track: str) -> str | None:
         """Chemin d'un fichier WAV lisible par pygame.mixer.music.
 
-        1. le fichier pré-calculé assets/audio/bgm.wav ;
-        2. sinon génération + un SEUL fichier temporaire réutilisé
-           (l'ancienne version en créait un nouveau à chaque partie).
+        1. le fichier pré-calculé assets/audio/<piste>.wav ;
+        2. sinon génération + un SEUL fichier temporaire par piste, réutilisé.
         """
-        path = _asset_path(BGM_NAME)
+        name, generator = BGM_TRACKS[track]
+        path = _asset_path(name)
         if os.path.exists(path):
             return path
-        if self._bgm_tmpfile and os.path.exists(self._bgm_tmpfile):
-            return self._bgm_tmpfile
-        data = load_or_generate(BGM_NAME, _make_bgm)
+        tmp = self._bgm_tmpfiles.get(track)
+        if tmp and os.path.exists(tmp):
+            return tmp
+        data = load_or_generate(name, generator)
         if os.path.exists(path):              # le cache vient d'être écrit
             return path
         import tempfile
-        fd, tmp = tempfile.mkstemp(suffix=".wav", prefix="tetris_bgm_")
+        fd, tmp = tempfile.mkstemp(suffix=".wav", prefix=f"tetris_{name}_")
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-        self._bgm_tmpfile = tmp
+        self._bgm_tmpfiles[track] = tmp
         return tmp
 
-    def play_bgm(self):
-        """Démarre la musique de fond en boucle."""
-        if not self.available:
+    def play_bgm(self, track: str = "game", fade_ms: int = 500):
+        """Démarre une piste en boucle ("game" ou "menu").
+
+        Si cette piste joue déjà, rien ne se passe : la musique du menu
+        continue sans coupure entre menu, paramètres et classement.
+        """
+        if not self.available or track not in BGM_TRACKS:
             return
         try:
-            src = self._bgm_source()
+            if (track == self._bgm_track and self._bgm_playing
+                    and _mixer.music.get_busy()):
+                return
+            src = self._bgm_source(track)
             if not src:
                 return
             _mixer.music.load(src)
             _mixer.music.set_volume(self._bgm_volume)
-            _mixer.music.play(loops=-1)  # boucle infinie
+            _mixer.music.play(loops=-1, fade_ms=fade_ms)   # boucle infinie
+            self._bgm_track = track
             self._bgm_playing = True
         except Exception:
             pass
@@ -677,11 +860,15 @@ class AudioManager:
         """Libère les ressources."""
         self.stop_bgm()
         try:
-            if self._bgm_tmpfile and os.path.exists(self._bgm_tmpfile):
-                _mixer.music.unload()
-                os.unlink(self._bgm_tmpfile)
+            _mixer.music.unload()
         except Exception:
             pass
+        for tmp in self._bgm_tmpfiles.values():
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        self._bgm_tmpfiles.clear()
 
 
 # ── Instance globale (singleton) ──────────────────────────────

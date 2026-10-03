@@ -17,6 +17,10 @@ import time
 
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+# Sauvegardes dans un dossier temporaire : les tests ne touchent jamais
+# aux paramètres ni au classement du joueur.
+import tempfile  # noqa: E402
+os.environ.setdefault("TETRIS_DATA_DIR", tempfile.mkdtemp(prefix="tetris_test_"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.chdir(ROOT)
@@ -95,6 +99,18 @@ def test_menu():
         app._menu_tick()
         app.root.after_cancel(app._anim_id)
         app.root.update()
+    # Panneaux de saisie : annuler, puis lancer une partie multi et quitter
+    app._start_solo()
+    app.root.update()
+    app._panel._cancel(from_key=True)
+    app._start_multi()
+    app.root.update()
+    app._panel._confirm(from_key=True)              # noms par défaut
+    app.root.update()
+    game = next(w for w in app.root.winfo_children() if hasattr(w, "_quit"))
+    game.after_cancel(game._tick_id)
+    game._quit()                                    # → retour au menu
+    app.root.update()
     app._show_settings()
     app.root.update()
     app._show_leaderboard()
@@ -102,7 +118,7 @@ def test_menu():
     app._show_menu()
     app.root.update()
     app.root.destroy()
-    return f"menu  : 300 frames en {time.monotonic() - t0:.2f} s"
+    return f"menu  : 300 frames + panneaux en {time.monotonic() - t0:.2f} s"
 
 
 def main_():

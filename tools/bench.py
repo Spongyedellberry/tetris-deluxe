@@ -23,6 +23,10 @@ import time
 # Le benchmark ne doit pas dépendre d'une carte son
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+# Sauvegardes dans un dossier temporaire : les tests ne touchent jamais
+# aux paramètres ni au classement du joueur.
+import tempfile  # noqa: E402
+os.environ.setdefault("TETRIS_DATA_DIR", tempfile.mkdtemp(prefix="tetris_test_"))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
